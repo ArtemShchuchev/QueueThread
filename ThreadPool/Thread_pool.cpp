@@ -1,28 +1,28 @@
-#include "Thread_pool.h"
+п»ї#include "Thread_pool.h"
 
 
 Thread_pool::Thread_pool()
 {
-	// -1 поток, т.к.: main
+	// -1 РїРѕС‚РѕРє, С‚.Рє.: main
 	int numThr(std::thread::hardware_concurrency() - 1);
-	if (numThr <= 0) numThr = 1;	// вдруг ядер меньше 2х
-	pool.resize(numThr);			// устанавливаю размер вектора
+	if (numThr <= 0) numThr = 1;	// РІРґСЂСѓРі СЏРґРµСЂ РјРµРЅСЊС€Рµ 2С…
+	pool.resize(numThr);			// СѓСЃС‚Р°РЅР°РІР»РёРІР°СЋ СЂР°Р·РјРµСЂ РІРµРєС‚РѕСЂР°
 	mode.assign(numThr, thread_mode::free);
 	
-	// выборка задач из очереди, происходит в потоках
+	// РІС‹Р±РѕСЂРєР° Р·Р°РґР°С‡ РёР· РѕС‡РµСЂРµРґРё, РїСЂРѕРёСЃС…РѕРґРёС‚ РІ РїРѕС‚РѕРєР°С…
 	for (int i(0); i<numThr; ++i) pool[i] = std::thread([this, i] { work(i); });
 	/*
-	pool.reserve(numThr);			// устанавливаю размер вектора
+	pool.reserve(numThr);			// СѓСЃС‚Р°РЅР°РІР»РёРІР°СЋ СЂР°Р·РјРµСЂ РІРµРєС‚РѕСЂР°
 	for (int i(0); i < numThr; ++i) pool.push_back(std::thread([this, i] { work(i); }));
 	*/
 }
 
 Thread_pool::~Thread_pool()
 {
-	for (auto& pt : pool) squeue.push(nullptr);	// остановить ожидание пустой очереди
+	for (auto& pt : pool) squeue.push(nullptr);	// РѕСЃС‚Р°РЅРѕРІРёС‚СЊ РѕР¶РёРґР°РЅРёРµ РїСѓСЃС‚РѕР№ РѕС‡РµСЂРµРґРё
 	for (auto& pt : pool) pt.join();
 }
-// выбирает из очереди очередную задачу и выполняет ее
+// РІС‹Р±РёСЂР°РµС‚ РёР· РѕС‡РµСЂРµРґРё РѕС‡РµСЂРµРґРЅСѓСЋ Р·Р°РґР°С‡Сѓ Рё РІС‹РїРѕР»РЅСЏРµС‚ РµРµ
 #define ATOMIC_MODE(fn) modeLock.lock();mode[thrNum]=(fn);modeLock.unlock()
 void Thread_pool::work(const int thrNum)
 {
@@ -34,32 +34,32 @@ void Thread_pool::work(const int thrNum)
 
 #ifdef DEBUG
 		std::lock_guard<std::mutex> lock(consoleLock);
-		std::wcout << L"< Поток: " << thrNum;
+		std::wcout << L"< РџРѕС‚РѕРє: " << thrNum;
 #endif // DEBUG
 
 		if (task)
 		{
 #ifdef DEBUG
-			std::wcout << L" - в работе >  ";
+			std::wcout << L" - РІ СЂР°Р±РѕС‚Рµ >  ";
 #endif // DEBUG
 			task();
 		}
 		else
 		{
 #ifdef DEBUG
-			std::wcout << L" - завершил работу >\n";
+			std::wcout << L" - Р·Р°РІРµСЂС€РёР» СЂР°Р±РѕС‚Сѓ >\n";
 #endif // DEBUG
-			break;	// больше задач не будет СТОП поток
+			break;	// Р±РѕР»СЊС€Рµ Р·Р°РґР°С‡ РЅРµ Р±СѓРґРµС‚ РЎРўРћРџ РїРѕС‚РѕРє
 		}
 	}
 }
 #undef ATOMIC_MODE
-// помещает в очередь очередную задачу
+// РїРѕРјРµС‰Р°РµС‚ РІ РѕС‡РµСЂРµРґСЊ РѕС‡РµСЂРµРґРЅСѓСЋ Р·Р°РґР°С‡Сѓ
 void Thread_pool::submit(const task_t& task)
 {
 	squeue.push(task);
 }
-// возвращает true если в очереди или хоть в одном потоке есть задачи
+// РІРѕР·РІСЂР°С‰Р°РµС‚ true РµСЃР»Рё РІ РѕС‡РµСЂРµРґРё РёР»Рё С…РѕС‚СЊ РІ РѕРґРЅРѕРј РїРѕС‚РѕРєРµ РµСЃС‚СЊ Р·Р°РґР°С‡Рё
 bool Thread_pool::isBusy()
 {
 	if (!squeue.empty()) return true;
@@ -71,7 +71,7 @@ bool Thread_pool::isBusy()
 	}
 	return false;
 }
-// ждет пока все потоки освободятся
+// Р¶РґРµС‚ РїРѕРєР° РІСЃРµ РїРѕС‚РѕРєРё РѕСЃРІРѕР±РѕРґСЏС‚СЃСЏ
 void Thread_pool::wait()
 {
 	while (isBusy());
