@@ -1,12 +1,13 @@
 #include "Thread_pool.h"
 
+
 Thread_pool::Thread_pool()
 {
 	// -1 поток, т.к.: main
 	int numThr(std::thread::hardware_concurrency() - 1);
 	if (numThr <= 0) numThr = 1;	// вдруг ядер меньше 2х
 	pool.resize(numThr);			// устанавливаю размер вектора
-	mode.assign(numThr, thr_free);
+	mode.assign(numThr, thread_mode::free);
 	
 	// выборка задач из очереди, происходит в потоках
 	for (int i(0); i<numThr; ++i) pool[i] = std::thread([this, i] { work(i); });
@@ -22,14 +23,14 @@ Thread_pool::~Thread_pool()
 	for (auto& pt : pool) pt.join();
 }
 // выбирает из очереди очередную задачу и выполняет ее
+#define ATOMIC_MODE(fn) modeLock.lock();mode[thrNum]=(fn);modeLock.unlock()
 void Thread_pool::work(const int thrNum)
 {
 	while (true)
 	{
+		ATOMIC_MODE(thread_mode::free);
 		task_t task = squeue.pop();
-		std::unique_lock<std::mutex> ml(modeLock);
-		mode[thrNum] = thr_busy;
-		ml.unlock();
+		ATOMIC_MODE(thread_mode::busy);
 
 #ifdef DEBUG
 		std::lock_guard<std::mutex> lock(consoleLock);
@@ -50,11 +51,9 @@ void Thread_pool::work(const int thrNum)
 #endif // DEBUG
 			break;	// больше задач не будет СТОП поток
 		}
-
-		ml.lock();
-		mode[thrNum] = thr_free;
 	}
 }
+#undef ATOMIC_MODE
 // помещает в очередь очередную задачу
 void Thread_pool::submit(const task_t& task)
 {
@@ -66,9 +65,9 @@ bool Thread_pool::isBusy()
 	if (!squeue.empty()) return true;
 
 	std::lock_guard<std::mutex> ml(modeLock);
-	for (auto& m : mode)
+	for (auto& status : mode)
 	{
-		if (m == thr_busy) return true;
+		if (status == thread_mode::busy) return true;
 	}
 	return false;
 }

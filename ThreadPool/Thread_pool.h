@@ -6,14 +6,14 @@
 #include <thread>
 #include "Safe_queue.hpp"
 
-//#define DEBUG
+#define DEBUG
 
 using task_t = std::function<void()>;
 
 class Thread_pool
 {
 private:
-	enum thread_mode { thr_free, thr_busy };
+	enum class thread_mode { free, busy };
 	// вектор потоков
 	// инициализация в конструкторе класса
 	// уничтожение в деструкторе
