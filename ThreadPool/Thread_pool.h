@@ -16,17 +16,15 @@ private:
 		thread_mode mode;
 		std::chrono::steady_clock::time_point start;
 	};
-	// вектор потоков
-	// инициализация в конструкторе класса
-	// уничтожение в деструкторе
-	std::vector<std::thread> pool;
-	std::vector<Status> status;
-	Safe_queue<task_t> squeue;	// очередь задач
+	std::vector<std::thread> pool;	// пул потоков
+	std::vector<Status> status;		// состояние потоков 
+	Safe_queue<task_t> squeue;		// безопасная очередь задач
 
 	// выбирает из очереди очередную задачу и выполняет ее
 	// данный метод передается конструктору потоков для исполнения
 	void work(const unsigned idx);
-	// возвращает true если в очереди или хоть в одном потоке есть задачи
+	// возвращает true если в очереди или хоть в одном работающем потоке есть задачи
+	// принимает время для ожидания зависшего потока в секундах
 	bool isBusy(const std::chrono::seconds& sec);
 
 public:

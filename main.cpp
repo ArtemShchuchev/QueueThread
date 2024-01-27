@@ -1,5 +1,5 @@
 ﻿#include "SecondaryFunction.h"
-#include "Thread_pool.h"		// тут для наглядности -> #define DEBUG
+#include "Thread_pool.h"
 #include "Safe_queue.hpp"
 
 /*
