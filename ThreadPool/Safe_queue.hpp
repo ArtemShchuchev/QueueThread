@@ -18,8 +18,10 @@ public:
 	// нотифицируется условная переменная
 	void push(const Task& task)
 	{
-		std::lock_guard<std::mutex> lock(taskLock);
-		taskList.push(task);
+		{
+			std::lock_guard<std::mutex> lock(taskLock);
+			taskList.push(task);
+		}
 		taskCondition.notify_one();
 	}
 	// находится в ожидании пока не придут уведомления

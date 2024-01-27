@@ -1,78 +1,63 @@
 ﻿#include "Thread_pool.h"
 
-
-Thread_pool::Thread_pool()
+Thread_pool::Thread_pool(const unsigned numThr)
 {
-	// -1 поток, т.к.: main
-	int numThr(std::thread::hardware_concurrency() - 1);
-	if (numThr <= 0) numThr = 1;	// вдруг ядер меньше 2х
-	pool.resize(numThr);			// устанавливаю размер вектора
-	mode.assign(numThr, thread_mode::free);
+	pool.resize(numThr);	// устанавливаю размер вектора
+	status.assign(numThr, { thread_mode::free, {} });
 	
 	// выборка задач из очереди, происходит в потоках
-	for (int i(0); i<numThr; ++i) pool[i] = std::thread([this, i] { work(i); });
-	/*
-	pool.reserve(numThr);			// устанавливаю размер вектора
-	for (int i(0); i < numThr; ++i) pool.push_back(std::thread([this, i] { work(i); }));
-	*/
+	for (unsigned i(0); i < numThr; ++i) {
+		pool[i] = std::thread([this, i] { work(i); });
+		pool[i].detach();
+	}
 }
 
 Thread_pool::~Thread_pool()
 {
-	for (auto& pt : pool) squeue.push(nullptr);	// остановить ожидание пустой очереди
-	for (auto& pt : pool) pt.join();
+	wait();	// ожидание завершения работы потоками
 }
+
 // выбирает из очереди очередную задачу и выполняет ее
-#define ATOMIC_MODE(fn) modeLock.lock();mode[thrNum]=(fn);modeLock.unlock()
-void Thread_pool::work(const int thrNum)
+void Thread_pool::work(const unsigned idx)
 {
 	while (true)
 	{
-		ATOMIC_MODE(thread_mode::free);
-		task_t task = squeue.pop();
-		ATOMIC_MODE(thread_mode::busy);
-
-#ifdef DEBUG
-		std::lock_guard<std::mutex> lock(consoleLock);
-		std::wcout << L"< Поток: " << thrNum;
-#endif // DEBUG
-
-		if (task)
-		{
-#ifdef DEBUG
-			std::wcout << L" - в работе >  ";
-#endif // DEBUG
-			task();
-		}
-		else
-		{
-#ifdef DEBUG
-			std::wcout << L" - завершил работу >\n";
-#endif // DEBUG
-			break;	// больше задач не будет СТОП поток
-		}
+		const task_t task = squeue.pop();
+		
+		status[idx].start = std::chrono::steady_clock::now();
+		status[idx].mode = thread_mode::busy;
+		task();
+		status[idx].mode = thread_mode::free;
 	}
 }
-#undef ATOMIC_MODE
+
 // помещает в очередь очередную задачу
-void Thread_pool::submit(const task_t& task)
+void Thread_pool::add(const task_t& task)
 {
-	squeue.push(task);
+	if (task)
+		squeue.push(task);
 }
-// возвращает true если в очереди или хоть в одном потоке есть задачи
-bool Thread_pool::isBusy()
-{
-	if (!squeue.empty()) return true;
 
-	std::lock_guard<std::mutex> ml(modeLock);
-	for (auto& status : mode)
-	{
-		if (status == thread_mode::busy) return true;
-	}
-	return false;
-}
-// ждет пока все потоки освободятся
-void Thread_pool::wait()
+// возвращает true если в очереди или
+// хоть в одном работающем потоке есть задачи
+bool Thread_pool::isBusy(const std::chrono::seconds& sec)
 {
-	while (isBusy());
+	bool free_f(false);	// все потоки заняты?
+	for (auto& [mode, start] : status) {
+		if (mode == thread_mode::busy) {
+			auto diff = std::chrono::steady_clock::now() - start;
+			if (diff < sec) return true;	// поток работает
+		}
+		else free_f = true;					// хоть 1 поток свободен
+	}
+	// если все потоки висят или очередь пуста -> false
+	return (!squeue.empty() && free_f);
+}
+
+// ждет пока все потоки освободятся или все потоки timeout
+void Thread_pool::wait(const std::chrono::seconds sec)
+{
+	while (isBusy(sec)) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	};
 }

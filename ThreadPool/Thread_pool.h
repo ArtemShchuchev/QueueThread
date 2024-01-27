@@ -6,39 +6,36 @@
 #include <thread>
 #include "Safe_queue.hpp"
 
-#define DEBUG
-
 using task_t = std::function<void()>;
 
 class Thread_pool
 {
 private:
 	enum class thread_mode { free, busy };
+	struct Status {
+		thread_mode mode;
+		std::chrono::steady_clock::time_point start;
+	};
 	// вектор потоков
 	// инициализация в конструкторе класса
 	// уничтожение в деструкторе
 	std::vector<std::thread> pool;
-	std::vector<thread_mode> mode;
+	std::vector<Status> status;
 	Safe_queue<task_t> squeue;	// очередь задач
-	std::mutex modeLock;
-#ifdef DEBUG
-	std::mutex consoleLock;
-#endif // DEBUG
-
 
 	// выбирает из очереди очередную задачу и выполняет ее
 	// данный метод передается конструктору потоков для исполнения
-	void work(const int thrNum);
+	void work(const unsigned idx);
 	// возвращает true если в очереди или хоть в одном потоке есть задачи
-	bool isBusy();
+	bool isBusy(const std::chrono::seconds& sec);
 
 public:
-	Thread_pool();
+	Thread_pool(const unsigned numThr);
 	~Thread_pool();
 	// помещает в очередь очередную задачу, метод принимает
 	// объект шаблона std::function или 
 	// объект шаблона std::packaged_task
-	void submit(const task_t& task);
+	void add(const task_t& task);
 	// ждет пока все потоки освободятся
-	void wait();
+	void wait(const std::chrono::seconds sec = std::chrono::seconds(2));
 };
