@@ -17,42 +17,40 @@
 3. Раз в секунду класть в пул одновременно 2 функции и проверять их исполнение.
 */
 
-static task_t make_task(std::mutex& m, int i);
-static task_t make_task2(std::mutex& m, int i);
+static task_t make_task(std::shared_ptr<std::mutex> m, int i);
+static task_t make_task2(std::shared_ptr<std::mutex>, int i);
 
 int main(int argc, char** argv)
 {
 	printHeader(L"Курсовой проект «Потокобезопасная очередь»");
 
-	std::mutex consoleLock;
-	// -1 поток, т.к.: main
-	//int numThr(std::thread::hardware_concurrency() - 1);
-	//if (numThr <= 0) numThr = 1;	// вдруг ядер меньше 2х
-	const int numThr(7);
+	auto consoleLock = std::make_shared<std::mutex>();
+	const int numThr(std::thread::hardware_concurrency());
+	//const int numThr(7);
 	Thread_pool tp(numThr);
 	
 	for (int i = 0; i < 7; ++i) {
 		tp.add(make_task(consoleLock, i));
 	}
 	//tp.wait();
-	std::wcout << "\n";
+	//std::wcout << "\n";
 
 	for (int i = 0; i < 100; ++i) {
 		tp.add(make_task2(consoleLock, i));
 	}
 	//tp.wait();
-	std::wcout << "\n";
+	//std::wcout << "\n";
 
-	auto f1 = [&consoleLock]() {
+	auto f1 = [consoleLock]() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-		std::lock_guard<std::mutex> lock(consoleLock);
+		std::lock_guard<std::mutex> lock(*consoleLock);
 		consoleCol(col::br_green);
 		std::wcout << L"-= Я функция 1, мой поток: " << std::this_thread::get_id() << " =-\n";
 		consoleCol(col::cancel);
 	};
-	auto f2 = [&consoleLock]() {
+	auto f2 = [consoleLock]() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-		std::lock_guard<std::mutex> lock(consoleLock);
+		std::lock_guard<std::mutex> lock(*consoleLock);
 		consoleCol(col::br_yellow);
 		std::wcout << L"-= Я функция 2, мой поток: " << std::this_thread::get_id() << " =-\n\n";
 		consoleCol(col::cancel);
@@ -65,19 +63,25 @@ int main(int argc, char** argv)
 	}
 	//tp.wait();
 
-	tp.add([] {while (true); });
+	tp.add([consoleLock] {
+		consoleLock->lock();
+		consoleCol(col::br_red);
+		std::wcout << L"-= Зависшая программа, мой поток: " << std::this_thread::get_id() << " =-\n";
+		consoleCol(col::cancel);
+		consoleLock->unlock();
+		while (true); });
 
-	consoleLock.lock();
-	std::wcout << L"Конец программы\n";
-	consoleLock.unlock();
+	consoleLock->lock();
+	std::wcout << L"Конец main\n";
+	consoleLock->unlock();
 	return 0;
 }
 
 
-static task_t make_task(std::mutex& m, int i)
+static task_t make_task(std::shared_ptr<std::mutex> m, int i)
 {
-	auto t = [&m, i]() {
-		std::unique_lock<std::mutex> lock(m);
+	auto t = [m, i]() {
+		std::unique_lock<std::mutex> lock(*m);
 		consoleCol(col::br_blue + i);
 		std::wcout << "id: " << std::this_thread::get_id()
 			<< " -> " << i + 1 << "\n";
@@ -85,13 +89,13 @@ static task_t make_task(std::mutex& m, int i)
 		};
 	return t;
 }
-static task_t make_task2(std::mutex& m, int i)
+static task_t make_task2(std::shared_ptr<std::mutex> m, int i)
 {
-	auto t = [&m, i]() {
-		m.lock();
+	auto t = [m, i]() {
+		m->lock();
 		std::wcout << L"Мой поток: " << std::this_thread::get_id()
 			<< L", запрос: " << i + 1 << '\n';
-		m.unlock();
+		m->unlock();
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 250 });
 	};
 	return t;
