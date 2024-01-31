@@ -8,9 +8,9 @@ template<class Task>
 class Safe_queue
 {
 private:
-	std::queue<Task> taskList;	// очередь задач
 	std::mutex taskLock;		// мьютекс для блокировки очереди задач
 	std::condition_variable taskCondition; // для уведомлений
+	std::queue<Task> taskList;	// очередь задач
 
 public:
 	// записывает в начало очереди новую задачу, при этом

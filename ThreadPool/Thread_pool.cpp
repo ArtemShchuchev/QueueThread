@@ -1,6 +1,6 @@
 ﻿#include "Thread_pool.h"
 
-Thread_pool::Thread_pool(const unsigned numThr)
+Thread_pool::Thread_pool(const unsigned numThr) : _timeout(std::chrono::seconds(2))
 {
 	pool.resize(numThr);	// устанавливаю размер вектора
 	status.assign(numThr, { thread_mode::free, {} });
@@ -38,26 +38,62 @@ void Thread_pool::add(const task_t& task)
 		squeue.push(task);
 }
 
+void Thread_pool::setTimeout(const std::chrono::seconds timeout)
+{
+	_timeout = timeout;
+}
+
 // возвращает true если в очереди или
 // хоть в одном работающем потоке есть задачи
-bool Thread_pool::isBusy(const std::chrono::seconds& sec)
+bool Thread_pool::isBusy()
 {
-	bool free_f(false);	// все потоки заняты?
+	int hangsCount(0);	// счетчик зависших потоков
 	for (auto& [mode, start] : status) {
 		if (mode == thread_mode::busy) {
 			auto diff = std::chrono::steady_clock::now() - start;
-			if (diff < sec) return true;	// поток работает
+			if (diff < _timeout) {
+				// поток работает и его время
+				// не превысило таймаут -> true
+				return true;
+			}
+			// поток висит
+			++hangsCount;
 		}
-		else free_f = true;					// хоть 1 поток свободен
+		// хоть 1 поток свободен
 	}
-	// если все потоки висят или очередь пуста -> false
-	return (!squeue.empty() && free_f);
+	// если очередь не пуста при хоть 1ом свободном потоке -> true
+	// если все потоки висят -> false
+	// если очередь пуста, а потоки висят или свободны -> false
+	const bool queueempty(squeue.empty());
+	const bool hangs_f(hangsCount == status.size());
+	/*
+	*/
+	const std::wstring queueStat_str = queueempty ? L"Очередь пуста" : L"Очередь занята";
+	if (hangs_f) {
+		std::wcout << L"Все потоки висят! (" + queueStat_str + L")\n";
+	}
+	else {
+		if (queueempty) {
+			if (hangsCount) {
+				std::wcout << L"Висит потоков: " << hangsCount
+					<< L", остальные простаивают ("
+					+ queueStat_str + L")\n";
+			}
+			else std::wcout << L"Работа в потоках закончена!\n";
+		}
+		else {
+			// Поток простаивает при том, что есть работа в очереди -> true
+			std::wcout << queueStat_str + L" при свободном потоке, подождем...\n";
+		}
+	}
+
+	return (queueempty || hangs_f) ? false : true;
 }
 
 // ждет пока все потоки освободятся или все потоки timeout
-void Thread_pool::wait(const std::chrono::seconds sec)
+void Thread_pool::wait()
 {
-	while (isBusy(sec)) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	while (isBusy()) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	};
 }

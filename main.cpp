@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 	const int numThr(7);
 	Thread_pool tp(numThr);
 	
-	for (size_t i = 0; i < 7; ++i) {
+	for (int i = 0; i < 7; ++i) {
 		tp.add(make_task(consoleLock, i));
 	}
 	//tp.wait();
